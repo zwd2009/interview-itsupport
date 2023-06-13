@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# 获取系统日志事件
+events=$(Get-WinEvent -LogName System -MaxEvents 1000)
+
+# 定义输出数组
+output=()
+
+# 分析每个事件
+for event in $events; do
+    # 获取设备名称
+    deviceName=$(echo $event | awk '{print $1}')
+    
+    # 获取错误进程号
+    processId=$(echo $event | awk '{print $2}')
+    
+    # 获取进程/服务名称
+    processName=$(echo $event | awk '{print $3}')
+    
+    # 获取错误描述
+    description=$(echo $event | awk '{$1=$2=$3=""; print $0}')
+    
+    # 获取事件时间并计算小时级别
+    time=$(echo $event | awk '{print $4}')
+    hour=$(date -d "$time" +"%H")
+    timeWindow="$hour-$((hour + 1))"
+    
+    #查询同一小时级别内出现的次数
+    numberOfOccurrence=$(echo "$events" | awk -v time="$time" -v hour="$hour" '$4 >= time && $4 < (time + 3600) {count++} END {print count}')
+    
+    # 构建输出对象
+    output+=("{\"deviceName\":\"$deviceName\",\"processId\":\"$processId\",\"processName\":\"$processName\",\"description\":\"$description\",\"timeWindow\":\"$timeWindow\",\"numberOfOccurrence\":$numberOfOccurrence}")
+done
+
+# 输出 JSON 格式结果
+echo "${output[@]}" | sed 's/}/},/g' | sed 's/^/[/;s/,$/]/' | jq .
